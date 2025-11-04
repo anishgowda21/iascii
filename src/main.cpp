@@ -51,7 +51,8 @@ private:
 
   string getAsciiText() {
     int counter = 0;
-    string ascii_text = "";
+    string ascii_text;
+    ascii_text.reserve(img.rows * img.cols * 20); //Reserve sufficient space for all ascii texts beforehand
     for (int i = 0; i < img.rows; i++) {
       for (int j = 0; j < img.cols; j++) {
         int intensity = img.at<uchar>(i, j);
@@ -67,7 +68,8 @@ private:
 
   string getColoredAsciiText() {
     int counter = 0;
-    string ascii_text = "";
+    string ascii_text;
+    ascii_text.reserve(img.rows * img.cols * 20); //Reserve sufficient space for all ascii texts beforehand
     for (int i = 0; i < img.rows; i++) {
       for (int j = 0; j < img.cols; j++) {
         cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
