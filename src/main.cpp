@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <opencv2/core/utils/logger.hpp>
 #include <opencv2/opencv.hpp>
 
 using namespace std;
@@ -89,10 +90,11 @@ private:
 public:
   ImgToAscii(string img_path, bool isColor = true, int width = 70)
       : imagePath(img_path), isColor(isColor), img_width(width) {
+    cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
     img = cv::imread(imagePath);
 
     if (img.empty()) {
-      cerr << "Invalid input file format\n\n";
+      cerr << "\nInvalid input file format\n\n";
       exit(EXIT_FAILURE);
       ;
     }
