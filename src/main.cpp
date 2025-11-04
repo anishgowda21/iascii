@@ -71,7 +71,9 @@ private:
     for (int i = 0; i < img.rows; i++) {
       for (int j = 0; j < img.cols; j++) {
         cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
-        int intensity = (pixel[0] + pixel[1] + pixel[2]) / 3;
+        int intensity =
+            0.114 * pixel[0] + 0.587 * pixel[1] +
+            0.299 * pixel[2]; // Use weighted calulation to calulate intensity
         int char_index = (size(CHAR_ARRAY) - 1) -
                          int((intensity / 255.0) * (size(CHAR_ARRAY) - 1));
         ascii_text +=
