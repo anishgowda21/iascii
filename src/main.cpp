@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 #include <random>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -41,12 +42,6 @@ private:
     this->img = resized_image;
 
     printf("Resized image is %dX%d\n", img.cols, img.rows);
-  }
-
-  void grayify() {
-    cv::Mat grayImg;
-    cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
-    this->img = grayImg;
   }
 
   string rgb_fg(int r, int g, int b, char c) {
@@ -88,7 +83,7 @@ private:
   }
 
 public:
-  ImgToAscii(string img_path, bool isColor = false)
+  ImgToAscii(string img_path, bool isColor = true)
       : imagePath(img_path), isColor(isColor) {
     img = cv::imread(imagePath);
 
@@ -98,8 +93,6 @@ public:
     }
 
     resize_image();
-    if (!isColor)
-      grayify();
   }
 
   void disPlayImg() {
@@ -118,6 +111,22 @@ public:
     string ascii_text = isColor ? getColoredAsciiText() : getAsciiText();
     cout << ascii_text << endl;
   }
+
+  void grayify() {
+    this->isColor = false;
+    cv::Mat grayImg;
+    cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
+    this->img = grayImg;
+  }
+
+  int handleOptions(string arg) {
+    if (arg == "-nc") {
+      grayify();
+    } else {
+      return 1;
+    }
+    return 0;
+  }
 };
 
 int randInt(int lo, int hi) {
@@ -127,28 +136,25 @@ int randInt(int lo, int hi) {
 }
 
 int main(int argv, char *argc[]) {
-  if (argv != 2) {
-    cerr << "Need Filename\n";
+  if (argv < 2) {
+    cerr << "Usage: iascii [--options] <filname>";
     return 1;
   }
-  //
-  // string arg1 = argc[1];
-  // string output = "";
-  //
-  // for (int i = 0; i < size(arg1); i++) {
-  //   int r = randInt(0, 255);
-  //   int g = randInt(0, 255);
-  //   int b = randInt(0, 255);
-  //   output += rgb_fg(r, g, b, arg1.at(i));
-  // }
-  //
-  // output += reset;
-  //
-  // cout << output << endl;
 
-  string filename = argc[1];
+  vector<string> args(argc, argc + argv);
 
-  ImgToAscii ita(filename, true);
+  string filename = args.back();
+
+  ImgToAscii ita(filename);
+
+  for (int i = 1; i < args.size() - 1; i++) {
+    int ret = ita.handleOptions(args.at(i));
+    if (ret == 1) {
+      cerr << "No args matching " << args.at(i) << endl;
+      exit(1);
+    }
+  }
+
   ita.printAscii();
 
   return 0;
