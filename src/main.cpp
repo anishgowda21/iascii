@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/core/hal/interface.h>
@@ -6,7 +7,6 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -19,6 +19,12 @@ static const char CHAR_ARRAY[] = {
     '\x20', '\x20', '\x20', '\x20', '\x20', '\x20', '\x20', '\x20', '\x20'};
 
 static const string reset = "\033[0m";
+
+enum OptionAction {
+  CONTINUE,
+  ERROR,
+  RETURN,
+};
 
 class ImgToAscii {
 private:
@@ -40,8 +46,6 @@ private:
     cv::resize(img, resized_image, cv::Size_(img_width, n_height));
 
     this->img = resized_image;
-
-    printf("Resized image is %dX%d\n", img.cols, img.rows);
   }
 
   string rgb_fg(int r, int g, int b, char c) {
@@ -50,16 +54,16 @@ private:
   }
 
   string getAsciiText() {
-    int counter = 0;
     string ascii_text;
-    ascii_text.reserve(img.rows * img.cols * 20); //Reserve sufficient space for all ascii texts beforehand
+    ascii_text.reserve(
+        img.rows * img.cols *
+        20); // Reserve sufficient space for all ascii texts beforehand
     for (int i = 0; i < img.rows; i++) {
       for (int j = 0; j < img.cols; j++) {
         int intensity = img.at<uchar>(i, j);
         int char_index = (size(CHAR_ARRAY) - 1) -
                          int((intensity / 255.0) * (size(CHAR_ARRAY) - 1));
         ascii_text += CHAR_ARRAY[char_index];
-        counter += 1;
       }
       ascii_text += '\n';
     }
@@ -67,9 +71,10 @@ private:
   }
 
   string getColoredAsciiText() {
-    int counter = 0;
     string ascii_text;
-    ascii_text.reserve(img.rows * img.cols * 20); //Reserve sufficient space for all ascii texts beforehand
+    ascii_text.reserve(
+        img.rows * img.cols *
+        20); // Reserve sufficient space for all ascii texts beforehand
     for (int i = 0; i < img.rows; i++) {
       for (int j = 0; j < img.cols; j++) {
         cv::Vec3b pixel = img.at<cv::Vec3b>(i, j);
@@ -109,7 +114,10 @@ public:
     cout << "The p was " << p << endl;
   }
 
-  string getImagePath() { return imagePath; }
+  string getImageName() {
+    filesystem::path p(imagePath);
+    return p.stem();
+  }
 
   void printAscii() {
     string ascii_text = isColor ? getColoredAsciiText() : getAsciiText();
@@ -123,21 +131,34 @@ public:
     this->img = grayImg;
   }
 
-  int handleOptions(string arg) {
-    if (arg == "-nc") {
-      grayify();
+  int write_to_file(string optionStr) {
+    grayify();
+    string outFilename = getImageName() + "_ascii.txt";
+    string ascii_text = getAsciiText();
+
+    ofstream outFile(outFilename, ios::binary);
+    if (outFile.is_open()) {
+      outFile << ascii_text;
+      outFile.close();
+      return 0;
     } else {
+      cerr << "Error while writing to file: " << outFilename << endl;
       return 1;
     }
-    return 0;
+  }
+
+  OptionAction handleOptions(string arg) {
+    if (arg == "-nc" || arg == "--no-color") {
+      grayify();
+    } else if (!arg.rfind("--save-file") || !arg.rfind("-S")) {
+      return write_to_file(arg) ? OptionAction::ERROR : OptionAction::RETURN;
+    } else {
+      cerr << "No args match " << arg << endl;
+      return OptionAction::ERROR;
+    }
+    return OptionAction::CONTINUE;
   }
 };
-
-int randInt(int lo, int hi) {
-  static std::mt19937 gen{std::random_device{}()};
-  std::uniform_int_distribution<int> dist(lo, hi);
-  return dist(gen);
-}
 
 int main(int argv, char *argc[]) {
   if (argv < 2) {
@@ -152,10 +173,17 @@ int main(int argv, char *argc[]) {
   ImgToAscii ita(filename);
 
   for (int i = 1; i < args.size() - 1; i++) {
-    int ret = ita.handleOptions(args.at(i));
-    if (ret == 1) {
-      cerr << "No args matching " << args.at(i) << endl;
-      exit(1);
+    string arg = args.at(i);
+    int ret = ita.handleOptions(arg);
+    switch (ret) {
+    case OptionAction::CONTINUE:
+      break;
+    case OptionAction::ERROR: {
+      return 1;
+    }
+    case OptionAction::RETURN: {
+      return 0;
+    }
     }
   }
 
