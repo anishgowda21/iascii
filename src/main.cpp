@@ -1,14 +1,7 @@
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <opencv2/core.hpp>
-#include <opencv2/core/hal/interface.h>
-#include <opencv2/core/types.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
-#include <string>
-#include <vector>
 
 using namespace std;
 
@@ -20,17 +13,18 @@ static const char CHAR_ARRAY[] = {
 
 static const string reset = "\033[0m";
 
-enum OptionAction {
-  CONTINUE,
-  ERROR,
-  RETURN,
+struct OptionConfig {
+  string inputFile;
+  bool noColor = false;
+  bool saveToFile = false;
+  int width = 70;
 };
 
 class ImgToAscii {
 private:
   string imagePath;
   cv::Mat img;
-  int img_width = 100;
+  int img_width;
   bool isColor;
 
   void resize_image() {
@@ -54,6 +48,7 @@ private:
   }
 
   string getAsciiText() {
+    grayify();
     string ascii_text;
     ascii_text.reserve(
         img.rows * img.cols *
@@ -92,13 +87,14 @@ private:
   }
 
 public:
-  ImgToAscii(string img_path, bool isColor = true)
-      : imagePath(img_path), isColor(isColor) {
+  ImgToAscii(string img_path, bool isColor = true, int width = 70)
+      : imagePath(img_path), isColor(isColor), img_width(width) {
     img = cv::imread(imagePath);
 
     if (img.empty()) {
-      cerr << "Cannot read the input file\n";
-      exit(1);
+      cerr << "Invalid input file format\n\n";
+      exit(EXIT_FAILURE);
+      ;
     }
 
     resize_image();
@@ -125,69 +121,91 @@ public:
   }
 
   void grayify() {
-    this->isColor = false;
     cv::Mat grayImg;
     cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
     this->img = grayImg;
   }
 
-  int write_to_file(string optionStr) {
-    grayify();
+  void write_to_file() {
     string outFilename = getImageName() + "_ascii.txt";
-    string ascii_text = getAsciiText();
+    string ascii_text = isColor ? getColoredAsciiText() : getAsciiText();
 
     ofstream outFile(outFilename, ios::binary);
     if (outFile.is_open()) {
       outFile << ascii_text;
       outFile.close();
-      return 0;
+      cout << "Output successfully written to " << outFilename << endl;
+      return;
     } else {
       cerr << "Error while writing to file: " << outFilename << endl;
-      return 1;
+      exit(EXIT_FAILURE);
+      ;
     }
-  }
-
-  OptionAction handleOptions(string arg) {
-    if (arg == "-nc" || arg == "--no-color") {
-      grayify();
-    } else if (!arg.rfind("--save-file") || !arg.rfind("-S")) {
-      return write_to_file(arg) ? OptionAction::ERROR : OptionAction::RETURN;
-    } else {
-      cerr << "No args match " << arg << endl;
-      return OptionAction::ERROR;
-    }
-    return OptionAction::CONTINUE;
   }
 };
 
-int main(int argv, char *argc[]) {
-  if (argv < 2) {
-    cerr << "Usage: iascii [--options] <filname>";
-    return 1;
+void printHelp() {
+  cout << "iascii - Image to ASCII art converter\n\n";
+  cout << "Usage: iascii [options] <filename>\n\n";
+  cout << "Options:\n";
+  cout << "  -nc, --no-color      Output in grayscale\n";
+  cout << "  -s,  --save-file     Save to file instead of stdout\n";
+  cout << "  -w,  --width <width> Specify custom row width to the output "
+          "ascii\n";
+  cout << "  -h,  --help          Show this help\n";
+}
+
+OptionConfig parseArgs(int argc, char *argv[]) {
+  OptionConfig config;
+
+  int index = 1;
+
+  while (index < argc) {
+    string arg = argv[index];
+    if (arg == "-h" || arg == "--help") {
+      printHelp();
+      exit(EXIT_SUCCESS);
+    } else if (arg == "-nc" || arg == "--no-color") {
+      config.noColor = true;
+    } else if (arg == "-s" || arg == "--save-file") {
+      config.saveToFile = true;
+    } else if (arg == "-w" || arg == "--width") {
+      try {
+        config.width = std::stoi(argv[++index]);
+      } catch (...) {
+        cerr << "Error: invalid width argument at index " << index << " ("
+             << argv[index] << ")" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    } else if (arg[0] != '-') {
+      config.inputFile = arg;
+    } else {
+      cerr << "Unknown option: " << arg << endl;
+      exit(EXIT_FAILURE);
+      ;
+    }
+    index++;
   }
 
-  vector<string> args(argc, argc + argv);
-
-  string filename = args.back();
-
-  ImgToAscii ita(filename);
-
-  for (int i = 1; i < args.size() - 1; i++) {
-    string arg = args.at(i);
-    int ret = ita.handleOptions(arg);
-    switch (ret) {
-    case OptionAction::CONTINUE:
-      break;
-    case OptionAction::ERROR: {
-      return 1;
-    }
-    case OptionAction::RETURN: {
-      return 0;
-    }
-    }
+  if (config.inputFile.empty()) {
+    cerr << "No input file specified\n";
+    exit(EXIT_FAILURE);
+    ;
   }
 
-  ita.printAscii();
+  return config;
+}
+
+int main(int argc, char *argv[]) {
+  OptionConfig cfg = parseArgs(argc, argv);
+
+  ImgToAscii ita(cfg.inputFile, !cfg.noColor, cfg.width);
+
+  if (cfg.saveToFile) {
+    ita.write_to_file();
+  } else {
+    ita.printAscii();
+  }
 
   return 0;
 }
