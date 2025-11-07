@@ -2,7 +2,10 @@
 #include <fstream>
 #include <iostream>
 #include <opencv2/core/utils/logger.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/videoio.hpp>
+#include <thread>
 
 using namespace std;
 
@@ -19,6 +22,7 @@ struct OptionConfig {
   bool noColor = false;
   bool saveToFile = false;
   int width = 70;
+  bool isLive = false;
 };
 
 class ImgToAscii {
@@ -102,6 +106,24 @@ public:
     resize_image();
   }
 
+  ImgToAscii(cv::Mat mat, bool isColor = true, int width = 70)
+      : img(mat), isColor(isColor), img_width(width) {
+    cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
+
+    if (img.empty()) {
+      cerr << "\nInvalid input file format\n\n";
+      exit(EXIT_FAILURE);
+      ;
+    }
+
+    resize_image();
+  }
+
+  void updateImg(cv::Mat mat) {
+    img = mat;
+    resize_image();
+  }
+
   void disPlayImg() {
     cv::imshow("Image", img);
     cv::waitKey(0);
@@ -112,6 +134,8 @@ public:
     cout << "The p was " << p << endl;
   }
 
+  int getHeight() { return img.rows; }
+
   string getImageName() {
     filesystem::path p(imagePath);
     return p.stem();
@@ -120,6 +144,11 @@ public:
   void printAscii() {
     string ascii_text = isColor ? getColoredAsciiText() : getAsciiText();
     cout << ascii_text << endl;
+  }
+
+  string getRawAsciiText() {
+    string ascii_text = isColor ? getColoredAsciiText() : getAsciiText();
+    return ascii_text;
   }
 
   void grayify() {
@@ -179,6 +208,9 @@ OptionConfig parseArgs(int argc, char *argv[]) {
              << argv[index] << ")" << std::endl;
         exit(EXIT_FAILURE);
       }
+    } else if (arg == "-l" || arg == "--live") {
+      config.isLive = true;
+      config.inputFile = "no file";
     } else if (arg[0] != '-') {
       config.inputFile = arg;
     } else {
@@ -201,8 +233,38 @@ OptionConfig parseArgs(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
   OptionConfig cfg = parseArgs(argc, argv);
 
-  ImgToAscii ita(cfg.inputFile, !cfg.noColor, cfg.width);
+  if (cfg.isLive) {
+    auto cap = cv::VideoCapture(0);
 
+    cv::Mat frame;
+    cap.read(frame);
+
+    cout << "\033[2J\033[H";
+    cout.flush();
+
+    ImgToAscii itva(frame, !cfg.noColor, cfg.width);
+    string ascii;
+
+    int linesToClear = 0;
+
+    while (1) {
+      cap.read(frame);
+      if (frame.empty()) {
+        cerr << "ERROR! blank frame grabbed\n";
+        break;
+      }
+
+      itva.updateImg(frame);
+      ascii = itva.getRawAsciiText();
+
+      linesToClear = std::count(ascii.begin(), ascii.end(), '\n');
+      cout << "\033[" << linesToClear << "A";
+      cout << ascii;
+      cout.flush();
+    }
+  }
+
+  ImgToAscii ita(cfg.inputFile, !cfg.noColor, cfg.width);
   if (cfg.saveToFile) {
     ita.write_to_file();
   } else {
