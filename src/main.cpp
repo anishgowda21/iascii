@@ -5,7 +5,9 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
-#include <thread>
+#include <poll.h>
+#include <termios.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -230,6 +232,19 @@ OptionConfig parseArgs(int argc, char *argv[]) {
   return config;
 }
 
+void setRawMode(bool enable) {
+  static struct termios oldt, newt;
+
+  if (enable) {
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  } else {
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+  }
+}
+
 int main(int argc, char *argv[]) {
   OptionConfig cfg = parseArgs(argc, argv);
 
@@ -246,8 +261,17 @@ int main(int argc, char *argv[]) {
     string ascii;
 
     int linesToClear = 0;
+    setRawMode(true);
+
+    struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
 
     while (1) {
+      if (poll(&pfd, 1, 0) > 0) {
+        char c;
+        if (read(STDIN_FILENO, &c, 1) > 0 && (c == 'q' || c == 'Q')) {
+          break;
+        }
+      }
       cap.read(frame);
       if (frame.empty()) {
         cerr << "ERROR! blank frame grabbed\n";
@@ -262,6 +286,11 @@ int main(int argc, char *argv[]) {
       cout << ascii;
       cout.flush();
     }
+
+    setRawMode(false);
+    cout << "\033[2J\033[H";
+    cout.flush();
+    return 0;
   }
 
   ImgToAscii ita(cfg.inputFile, !cfg.noColor, cfg.width);
