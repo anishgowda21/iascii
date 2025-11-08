@@ -185,6 +185,7 @@ void printHelp() {
   cout << "  -s,  --save-file     Save to file instead of stdout\n";
   cout << "  -w,  --width <width> Specify custom row width to the output "
           "ascii\n";
+  cout << "  -l,  --live          Live webcam ascii\n";
   cout << "  -h,  --help          Show this help\n";
 }
 
